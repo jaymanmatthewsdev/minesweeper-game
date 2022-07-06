@@ -65,22 +65,29 @@ export default component$(() => {
       .filter((spot_data) => spot_data !== null); 
   });
 
-  const expose_spot_at = $(async (row: number, col: number) => {
-    let temporary_grid_values = new Array(...state.grid_values);
-    temporary_grid_values.at(row).at(col).exposed = true;
-    if (state.grid_values.flat().filter(spot_data => spot_data.exposed).length === 1) await generate_mines.invoke();
-    state.grid_values = temporary_grid_values;
-    const p = await get_all_neighbouring_spots.invoke(row, col);
-    for (const { position: [row, col] } of p) {
-      //await expose_spot_at.invoke(row, col);
-    }
-  });
-
   const get_number_of_surrounding_mines = $(async (row: number, col: number) => {
     const neighbouring_spots = await get_all_neighbouring_spots.invoke(row, col);
     return neighbouring_spots 
       .filter(({ status }) => status === SPOT_STATE.MINE)
       .length;
+  });
+
+  const expose_spot_at = $(async (row: number, col: number) => {
+    let temporary_grid_values = new Array(...state.grid_values);
+    const _ = async (row: number, col: number) => {
+      const temp_spot_data = temporary_grid_values.at(row).at(col);
+      temp_spot_data.exposed = true;
+      if (state.grid_values.flat().filter(spot_data => spot_data.exposed).length === 1) await generate_mines.invoke();
+      const number_of_surrounding_mines = await get_number_of_surrounding_mines.invoke(row, col);
+      if (temp_spot_data.status === SPOT_STATE.MINE || number_of_surrounding_mines > 0) return;
+      const all_neighbouring_spots = await get_all_neighbouring_spots.invoke(row, col);
+      const unexposed_neighbouring_spots = all_neighbouring_spots.filter(({ exposed }) => !exposed);
+      for (const { position: [row, col] } of unexposed_neighbouring_spots) {
+        await _(row - 1, col - 1);
+      }
+    }
+    await _(row, col);
+    state.grid_values = temporary_grid_values;
   });
 
   const get_surrounding_mines_display = $((number_of_surrounding_mines: number) => {
